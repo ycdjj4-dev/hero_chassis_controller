@@ -1,66 +1,66 @@
-#pragma once
+    #pragma once
 
-#include "hero_chassis_controller/Algorithm.hpp"
+    #include "hero_chassis_controller/Algorithm.hpp"
 
-// ROS
-#include <ros/ros.h>
-#include <sensor_msgs/Temperature.h>
-#include <std_srvs/Trigger.h>
+    // ROS
+    #include <ros/ros.h>
+    #include <geometry_msgs/Twist.h>
+    #include <std_srvs/Trigger.h>
 
-namespace hero_chassis_controller {
+    namespace hero_chassis_controller {
 
-/*!
- * Main class for the node to handle the ROS interfacing.
- */
-class RosPackageTemplate {
- public:
-  /*!
-   * Constructor.
-   * @param nodeHandle the ROS node handle.
-   */
-  RosPackageTemplate(ros::NodeHandle &nodeHandle);
+    /*!
+     * Main class for the node to handle the ROS interfacing.
+     */
+    class RosPackageTemplate {
+     public:
+      /*!
+       * Constructor.
+       * @param nodeHandle the ROS node handle.
+       */
+      RosPackageTemplate(ros::NodeHandle &nodeHandle);
 
-  /*!
-   * Destructor.
-   */
-  virtual ~RosPackageTemplate();
+      /*!
+       * Destructor.
+       */
+      virtual ~RosPackageTemplate();
 
- private:
-  /*!
-   * Reads and verifies the ROS parameters.
-   * @return true if successful.
-   */
-  bool readParameters();
+     private:
+      /*!
+       * Reads and verifies the ROS parameters.
+       * @return true if successful.
+       */
+      bool readParameters();
 
-  /*!
-   * ROS topic callback method.
-   * @param message the received message.
-   */
-  void topicCallback(const sensor_msgs::Temperature &message);
+      /*!
+       * ROS topic callback method.
+       * @param message the received message.
+       */
+     void topicCallback(const geometry_msgs::Twist &message);
 
-  /*!
-   * ROS service server callback.
-   * @param request the request of the service.
-   * @param response the provided response.
-   * @return true if successful, false otherwise.
-   */
-  bool serviceCallback(std_srvs::Trigger::Request &request,
-                       std_srvs::Trigger::Response &response);
+      /*!
+       * ROS service server callback.
+       * @param request the request of the service.
+       * @param response the provided response.
+       * @return true if successful, false otherwise.
+       */
+      bool serviceCallback(std_srvs::Trigger::Request &request,
+                           std_srvs::Trigger::Response &response);
 
-  //! ROS node handle.
-  ros::NodeHandle &nodeHandle_;
+      //! ROS node handle.
+      ros::NodeHandle &nodeHandle_;
 
-  //! ROS topic subscriber.
-  ros::Subscriber subscriber_;
+      //! ROS topic subscriber.
+      ros::Subscriber subscriber_;
 
-  //! ROS topic name to subscribe to.
-  std::string subscriberTopic_;
+      //! ROS topic name to subscribe to.
+      std::string subscriberTopic_;
 
-  //! ROS service server.
-  ros::ServiceServer serviceServer_;
+      //! ROS service server.
+      ros::ServiceServer serviceServer_;
 
-  //! Algorithm computation object.
-  Algorithm algorithm_;
-};
+      //! Algorithm computation object.
+      Algorithm algorithm_;
+    };
 
-} /* namespace */
+    } /* namespace */

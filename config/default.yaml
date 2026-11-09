@@ -1,1 +1,29 @@
-subscriber_topic: /temperature
+subscriber_topic: /cmd_vel
+
+# 左前轮 PID
+pid_front_left:
+  p: 0.0
+  i: 0.0
+  d: 0.0
+  i_clamp: 0.0
+
+# 右前轮 PID
+pid_front_right:
+  p: 0.0
+  i: 0.0
+  d: 0.0
+  i_clamp: 0.0
+
+# 左后轮 PID
+pid_back_left:
+  p: 0.0
+  i: 0.0
+  d: 0.0
+  i_clamp: 0.0
+
+# 右后轮 PID
+pid_back_right:
+  p: 0.0
+  i: 0.0
+  d: 0.0
+  i_clamp: 0.0

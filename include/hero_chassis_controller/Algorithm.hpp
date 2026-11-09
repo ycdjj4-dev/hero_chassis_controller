@@ -38,6 +38,13 @@ class Algorithm {
    * @return the average of the data.
    */
   double getAverage() const;
+ /*!
+ * Calculate wheel velocities.
+ */
+ Eigen::Vector4d inverseKinematics(
+     const Eigen::Vector3d &chassis_velocity) const;
+ Eigen::Vector3d forwardKinematics(
+     const Eigen::Vector4d &wheel_velocity) const;
 
  private:
 

@@ -26,8 +26,24 @@ bool RosPackageTemplate::readParameters() {
   return true;
 }
 
-void RosPackageTemplate::topicCallback(const sensor_msgs::Temperature &message) {
-  algorithm_.addData(message.temperature);
+  void RosPackageTemplate::topicCallback(
+      const geometry_msgs::Twist &message) {
+
+  // 提取底盘速度
+  double vx = message.linear.x;
+  double vy = message.linear.y;
+  double wz = message.angular.z;
+
+  // 组成底盘速度向量
+  Eigen::Vector3d chassis_velocity(vx, vy, wz);
+
+  // 逆运动学：计算四个车轮的目标角速度
+  Eigen::Vector4d wheel_velocity =
+      algorithm_.inverseKinematics(chassis_velocity);
+
+  // 暂时打印计算结果，方便验证
+  ROS_INFO_STREAM_THROTTLE(
+      1.0, "Wheel velocities: " << wheel_velocity.transpose());
 }
 
 bool RosPackageTemplate::serviceCallback(std_srvs::Trigger::Request &request,

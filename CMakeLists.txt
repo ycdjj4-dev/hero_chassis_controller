@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ## By adding -Wall and -Werror, the compiler does not ignore warnings anymore,
 ## enforcing cleaner code.
-add_definitions(-Wall -Werror)
+add_compile_options(-Wall)
 
 ## Find catkin macros and libraries
 find_package(catkin REQUIRED
@@ -16,6 +16,12 @@ find_package(catkin REQUIRED
     sensor_msgs
     std_srvs
     roslint
+    control_toolbox
+        geometry_msgs
+        controller_interface
+        hardware_interface
+        pluginlib
+        realtime_tools
 )
 
 ## Find system libraries
@@ -36,11 +42,19 @@ catkin_package(
     include
     ## This is only necessary because Eigen3 sets a non-standard EIGEN3_INCLUDE_DIR variable
     ${EIGEN3_INCLUDE_DIR}
-    LIBRARIES
-    ${PROJECT_NAME}_core
+        LIBRARIES
+        ${PROJECT_NAME}_plugin
+        ${PROJECT_NAME}_core
     CATKIN_DEPENDS
     roscpp
     sensor_msgs
+    std_srvs
+    control_toolbox
+        geometry_msgs
+        controller_interface
+        hardware_interface
+        pluginlib
+        realtime_tools
     DEPENDS
     ## find_package(Eigen3) provides a non standard EIGEN3_INCLUDE_DIR instead of Eigen3_INCLUDE_DIRS.
     ## Therefore, the DEPEND does not work as expected and we need to add the directory to the INCLUDE_DIRS
@@ -75,7 +89,9 @@ target_compile_features(${PROJECT_NAME}_core INTERFACE cxx_std_11)
 add_executable(${PROJECT_NAME}
     src/${PROJECT_NAME}_node.cpp
     src/RosPackageTemplate.cpp
-    )
+        include/hero_chassis_controller/HeroChassisController.hpp
+        src/HeroChassisController.cpp
+)
 target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_11)
 
 ## Add dependencies to exported targets, like ROS msgs or srvs
