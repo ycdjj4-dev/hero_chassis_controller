@@ -41,14 +41,18 @@ Eigen::Vector4d Algorithm::inverseKinematics(
   double wz = chassis_velocity[2];
 
   double R = 0.07625;
+  // L = a + b, a: 半轴距(wheel_base/2), b: 半轮距(wheel_track/2)
+  // 本模型 wheel_base = wheel_track = 0.4 -> L = 0.2 + 0.2 = 0.4
   double L = 0.4;
 
   Eigen::Vector4d wheel_velocity;
 
-  wheel_velocity[0] = (vx + vy + L * wz) / R;
-  wheel_velocity[1] = (vx - vy - L * wz) / R;
-  wheel_velocity[2] = (vx + vy - L * wz) / R;
-  wheel_velocity[3] = (vx - vy + L * wz) / R;
+  // 经典麦轮逆运动学（与 rm_description_for_task 模型的辊子布局对应:
+  // reflect FL=1, FR=-1, BL=-1, BR=1, 关节轴均朝 +y）
+  wheel_velocity[0] = (vx - vy - L * wz) / R;  // left_front
+  wheel_velocity[1] = (vx + vy + L * wz) / R;  // right_front
+  wheel_velocity[2] = (vx + vy - L * wz) / R;  // left_back
+  wheel_velocity[3] = (vx - vy + L * wz) / R;  // right_back
 
   return wheel_velocity;
 }
@@ -65,11 +69,14 @@ Eigen::Vector3d Algorithm::forwardKinematics(
 
   Eigen::Vector3d chassis_velocity;
 
-  chassis_velocity[0] = R / 4 * (w1 + w2 + w3 + w4);
+  chassis_velocity[0] =
+    R / 4 * (w1 + w2 + w3 + w4);
 
-  chassis_velocity[1] = R / 4 * (w1 - w2 + w3 - w4);
+  chassis_velocity[1] =
+      R / 4 * (-w1 + w2 + w3 - w4);
 
-  chassis_velocity[2] = R / (4 * L) * (w1 - w2 - w3 + w4);
+  chassis_velocity[2] =
+      R / (4 * L) * (-w1 + w2 - w3 + w4);
 
   return chassis_velocity;
 }

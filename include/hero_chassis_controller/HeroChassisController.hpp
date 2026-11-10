@@ -74,6 +74,9 @@ namespace hero_chassis_controller {
         // 速度指令超时时间，默认 0.5 秒
         double cmd_vel_timeout_{0.5};
 
+        // 摩擦前馈增益 (N·m·s/rad)，默认 0.05
+        double feedforward_gain_{0.05};
+
         // 控制器启动时间
         ros::Time controller_start_time_;
     };

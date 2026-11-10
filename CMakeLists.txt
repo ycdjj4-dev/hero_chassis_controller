@@ -83,6 +83,20 @@ include_directories(
 add_library(${PROJECT_NAME}_core
     src/Algorithm.cpp
     )
+# 编译核心算法库
+set_target_properties(${PROJECT_NAME}_core PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+)
+
+# 编译底盘控制器动态插件
+add_library(hero_chassis_controller_plugin SHARED
+        src/HeroChassisController.cpp
+)
+
+target_link_libraries(hero_chassis_controller_plugin
+        ${PROJECT_NAME}_core
+        ${catkin_LIBRARIES}
+)
 target_compile_features(${PROJECT_NAME}_core INTERFACE cxx_std_11)
 
 ## Declare cpp executables
@@ -90,7 +104,6 @@ add_executable(${PROJECT_NAME}
     src/${PROJECT_NAME}_node.cpp
     src/RosPackageTemplate.cpp
         include/hero_chassis_controller/HeroChassisController.hpp
-        src/HeroChassisController.cpp
 )
 target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_11)
 
@@ -102,6 +115,10 @@ add_dependencies(${PROJECT_NAME}_core
 add_dependencies(${PROJECT_NAME}
     ${catkin_EXPORTED_TARGETS}
     )
+
+add_dependencies(hero_chassis_controller_plugin
+        ${catkin_EXPORTED_TARGETS}
+)
 
 ## Specify libraries to link executable targets against
 target_link_libraries(${PROJECT_NAME}_core
@@ -119,10 +136,13 @@ target_link_libraries(${PROJECT_NAME}
 
 # Mark executables and/or libraries for installation
 install(
-    TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_core
-    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+        TARGETS
+        ${PROJECT_NAME}
+        ${PROJECT_NAME}_core
+        hero_chassis_controller_plugin
+        ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+        LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 # Mark cpp header files for installation
@@ -136,6 +156,10 @@ install(
 install(
     DIRECTORY doc
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+install(
+        FILES hero_chassis_controller_plugin.xml
+        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 
 #############

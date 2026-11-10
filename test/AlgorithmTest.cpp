@@ -84,8 +84,8 @@ TEST(Algorithm, inverseKinematicsLateral) {
     Eigen::Vector4d result = algorithm.inverseKinematics(velocity);
 
     double expected[4] = {
-        1.0 / 0.07625,
         -1.0 / 0.07625,
+        1.0 / 0.07625,
         1.0 / 0.07625,
         -1.0 / 0.07625
     };
@@ -104,8 +104,8 @@ TEST(Algorithm, inverseKinematicsRotation) {
     double R = 0.07625;
 
     double expected[4] = {
-        L / R,
         -L / R,
+        L / R,
         -L / R,
         L / R
     };

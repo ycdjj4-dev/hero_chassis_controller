@@ -3,6 +3,7 @@
 //
 #include "hero_chassis_controller/HeroChassisController.hpp"
 #include <algorithm>
+#include <pluginlib/class_list_macros.h>
 
 namespace hero_chassis_controller {
 
@@ -23,30 +24,36 @@ namespace hero_chassis_controller {
 
             back_right_joint_ =
                 hw->getHandle("right_back_wheel_joint");
+            // 创建四个 PID 对应的参数命名空间
+            ros::NodeHandle pid_front_left_nh(controller_nh, "pid_front_left");
+            ros::NodeHandle pid_front_right_nh(controller_nh, "pid_front_right");
+            ros::NodeHandle pid_back_left_nh(controller_nh, "pid_back_left");
+            ros::NodeHandle pid_back_right_nh(controller_nh, "pid_back_right");
+
             // 初始化左前轮 PID
-            ros::NodeHandle pid_fl_nh(controller_nh, "pid_front_left");
-            if (!pid_front_left_.init(pid_fl_nh)) {
+            if (!pid_front_left_.init(pid_front_left_nh))
+            {
                 ROS_ERROR("Failed to initialize front left PID");
                 return false;
             }
 
             // 初始化右前轮 PID
-            ros::NodeHandle pid_fr_nh(controller_nh, "pid_front_right");
-            if (!pid_front_right_.init(pid_fr_nh)) {
+            if (!pid_front_right_.init(pid_front_right_nh))
+            {
                 ROS_ERROR("Failed to initialize front right PID");
                 return false;
             }
 
             // 初始化左后轮 PID
-            ros::NodeHandle pid_bl_nh(controller_nh, "pid_back_left");
-            if (!pid_back_left_.init(pid_bl_nh)) {
+            if (!pid_back_left_.init(pid_back_left_nh))
+            {
                 ROS_ERROR("Failed to initialize back left PID");
                 return false;
             }
 
             // 初始化右后轮 PID
-            ros::NodeHandle pid_br_nh(controller_nh, "pid_back_right");
-            if (!pid_back_right_.init(pid_br_nh)) {
+            if (!pid_back_right_.init(pid_back_right_nh))
+            {
                 ROS_ERROR("Failed to initialize back right PID");
                 return false;
             }
@@ -63,6 +70,12 @@ namespace hero_chassis_controller {
             "cmd_vel_timeout",
             cmd_vel_timeout_,
             0.5
+        );
+        // 读取摩擦前馈增益
+        controller_nh.param(
+            "feedforward_gain",
+            feedforward_gain_,
+            0.05
         );
         // 获取速度指令话题名称
         std::string subscriber_topic;
@@ -171,18 +184,22 @@ void HeroChassisController::update(
         double error_br =
             target_wheel_velocity[3] - back_right_joint_.getVelocity();
 
-        // 6. 四个 PID 分别计算输出力矩
+        // 6. 四个 PID 分别计算输出力矩，并叠加摩擦前馈
         double effort_fl =
-            pid_front_left_.computeCommand(error_fl, period);
+            pid_front_left_.computeCommand(error_fl, period) +
+            feedforward_gain_ * target_wheel_velocity[0];
 
         double effort_fr =
-            pid_front_right_.computeCommand(error_fr, period);
+            pid_front_right_.computeCommand(error_fr, period) +
+            feedforward_gain_ * target_wheel_velocity[1];
 
         double effort_bl =
-            pid_back_left_.computeCommand(error_bl, period);
+            pid_back_left_.computeCommand(error_bl, period) +
+            feedforward_gain_ * target_wheel_velocity[2];
 
         double effort_br =
-            pid_back_right_.computeCommand(error_br, period);
+            pid_back_right_.computeCommand(error_br, period) +
+            feedforward_gain_ * target_wheel_velocity[3];
 
         // 7. 限制输出力矩
         const double max_effort = 5.0;
@@ -216,4 +233,8 @@ void HeroChassisController::update(
             ROS_INFO("Hero chassis controller stopped!");
         }
 }
+PLUGINLIB_EXPORT_CLASS(
+    hero_chassis_controller::HeroChassisController,
+    controller_interface::ControllerBase
+)
 
