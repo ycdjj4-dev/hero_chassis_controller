@@ -1,9 +1,12 @@
-// gtest
+// gtest 测试入口。
+#include <cstdlib>
+#include <ctime>
+
 #include <gtest/gtest.h>
 
-// Run all the tests that were declared with TEST()
+// 运行所有已声明的 TEST() 测试。
 int main(int argc, char **argv) {
-  testing::InitGoogleTest(&argc, argv);
-  srand((int) time(0));
-  return RUN_ALL_TESTS();
+    testing::InitGoogleTest(&argc, argv);
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    return RUN_ALL_TESTS();
 }

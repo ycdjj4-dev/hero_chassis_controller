@@ -1,66 +1,57 @@
-    #pragma once
+// 节点主类：负责 ROS 接口（订阅 Twist、提供取平均服务）。
+#ifndef HERO_CHASSIS_CONTROLLER_ROSPACKAGETEMPLATE_HPP_
+#define HERO_CHASSIS_CONTROLLER_ROSPACKAGETEMPLATE_HPP_
 
-    #include "hero_chassis_controller/Algorithm.hpp"
+#include <string>
 
-    // ROS
-    #include <ros/ros.h>
-    #include <geometry_msgs/Twist.h>
-    #include <std_srvs/Trigger.h>
+#include <ros/ros.h>
 
-    namespace hero_chassis_controller {
+#include <geometry_msgs/Twist.h>
+#include <std_srvs/Trigger.h>
 
-    /*!
-     * Main class for the node to handle the ROS interfacing.
-     */
+#include "hero_chassis_controller/Algorithm.hpp"
+
+namespace hero_chassis_controller {
+    // 节点主类：负责 ROS 接口（订阅 Twist、提供取平均服务）。
     class RosPackageTemplate {
-     public:
-      /*!
-       * Constructor.
-       * @param nodeHandle the ROS node handle.
-       */
-      RosPackageTemplate(ros::NodeHandle &nodeHandle);
+    public:
+        // 构造函数。
+        // @param node_handle ROS 节点句柄。
+        explicit RosPackageTemplate(ros::NodeHandle &node_handle);
 
-      /*!
-       * Destructor.
-       */
-      virtual ~RosPackageTemplate();
+        virtual ~RosPackageTemplate();
 
-     private:
-      /*!
-       * Reads and verifies the ROS parameters.
-       * @return true if successful.
-       */
-      bool readParameters();
+    private:
+        // 读取并校验 ROS 参数。
+        // @return 读取成功返回 true。
+        bool ReadParameters();
 
-      /*!
-       * ROS topic callback method.
-       * @param message the received message.
-       */
-     void topicCallback(const geometry_msgs::Twist &message);
+        // ROS 话题回调。
+        // @param message 收到的消息。
+        void TopicCallback(const geometry_msgs::Twist &message);
 
-      /*!
-       * ROS service server callback.
-       * @param request the request of the service.
-       * @param response the provided response.
-       * @return true if successful, false otherwise.
-       */
-      bool serviceCallback(std_srvs::Trigger::Request &request,
-                           std_srvs::Trigger::Response &response);
+        // ROS 服务回调。
+        // @param request 服务请求。
+        // @param response 服务响应。
+        // @return 处理成功返回 true。
+        bool ServiceCallback(std_srvs::Trigger::Request &request,
+                             std_srvs::Trigger::Response &response);
 
-      //! ROS node handle.
-      ros::NodeHandle &nodeHandle_;
+        // ROS 节点句柄。
+        ros::NodeHandle &node_handle_;
 
-      //! ROS topic subscriber.
-      ros::Subscriber subscriber_;
+        // ROS 话题订阅器。
+        ros::Subscriber subscriber_;
 
-      //! ROS topic name to subscribe to.
-      std::string subscriberTopic_;
+        // 订阅的话题名。
+        std::string subscriber_topic_;
 
-      //! ROS service server.
-      ros::ServiceServer serviceServer_;
+        // ROS 服务服务器。
+        ros::ServiceServer service_server_;
 
-      //! Algorithm computation object.
-      Algorithm algorithm_;
+        // 算法计算对象。
+        Algorithm algorithm_;
     };
+} // namespace hero_chassis_controller
 
-    } /* namespace */
+#endif // HERO_CHASSIS_CONTROLLER_ROSPACKAGETEMPLATE_HPP_

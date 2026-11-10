@@ -1,58 +1,44 @@
-#pragma once
+// 运动学算法接口：麦轮逆/正运动学与数据统计。
+#ifndef HERO_CHASSIS_CONTROLLER_ALGORITHM_HPP_
+#define HERO_CHASSIS_CONTROLLER_ALGORITHM_HPP_
 
 #include <memory>
 
 #include <Eigen/Core>
 
 namespace hero_chassis_controller {
+    // 运动学算法类：提供麦轮逆/正运动学计算与数据统计功能。
+    class Algorithm {
+    public:
+        Algorithm();
 
-/*!
- * Class containing the algorithmic part of the package.
- */
-class Algorithm {
- public:
-  /*!
-   * Constructor.
-   */
-  Algorithm();
+        virtual ~Algorithm();
 
-  /*!
-   * Destructor.
-   */
-  virtual ~Algorithm();
+        // 添加单个测量数据。
+        void addData(double data);
 
-  /*!
-   * Add new measurement data.
-   * @param data the new data.
-   */
-  void addData(const double data);
+        // 添加一组测量数据。
+        void addData(const Eigen::VectorXd &data);
 
-  /*!
-   * Add multiple measurements as once.
-   * @param data new data.
-   */
-  void addData(const Eigen::VectorXd &data);
+        // 返回已添加数据的平均值；无数据时返回 0。
+        double getAverage() const;
 
-  /*!
-   * Get the computed average of the data.
-   * @return the average of the data.
-   */
-  double getAverage() const;
- /*!
- * Calculate wheel velocities.
- */
- Eigen::Vector4d inverseKinematics(
-     const Eigen::Vector3d &chassis_velocity) const;
- Eigen::Vector3d forwardKinematics(
-     const Eigen::Vector4d &wheel_velocity) const;
+        // 逆运动学：由底盘速度 (vx, vy, wz) 计算四轮目标角速度 (rad/s)。
+        // 返回顺序为 [左前, 右前, 左后, 右后]。
+        Eigen::Vector4d inverseKinematics(
+            const Eigen::Vector3d &chassis_velocity) const;
 
- private:
+        // 正运动学：由四轮角速度计算底盘速度 (vx, vy, wz)。
+        Eigen::Vector3d forwardKinematics(
+            const Eigen::Vector4d &wheel_velocity) const;
 
-  //! Forward declared structure that will contain the data
-  struct Data;
+    private:
+        // 前向声明的实现结构 (pimpl)。
+        struct Data;
 
-  //! Pointer to data (pimpl)
-  std::unique_ptr<Data> data_;
-};
+        // 指向实现数据的指针。
+        std::unique_ptr<Data> data_;
+    };
+} // namespace hero_chassis_controller
 
-} /* namespace */
+#endif // HERO_CHASSIS_CONTROLLER_ALGORITHM_HPP_
