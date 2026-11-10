@@ -1,200 +1,160 @@
-# Package Name
+# hero_chassis_controller
 
-## Overview
+基于 ros_control 的**麦克纳姆轮底盘控制器**，用于控制 Gazebo 中的 RoboMaster 英雄机器人底盘
+（模型来自 [rm_description_for_task](https://github.com/Bluefairy-ljy/rm_description_for_task.git)，仿真接口来自 `rm_gazebo`）。
 
-This is a template: replace, remove, and add where required. Describe here what this package does and what it's meant
-for in a few sentences.
+**关键词：** RoboMaster, mecanum, ros_control, PID, odometry, Gazebo
 
-**Keywords:** example, package, template
+## 概述
 
-Or, add some keywords to the Bitbucket or GitHub repository.
+- 以 ros_control **控制器插件** 的形式运行，通过 `pluginlib` 加载进 Gazebo 仿真（`EffortJointInterface`）；
+- 订阅 `/cmd_vel`（[geometry_msgs/Twist](http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Twist.html)），
+  将其视为底盘坐标系下的速度指令，经**麦轮逆运动学**解算四个车轮的期望转速；
+- 用四个 `control_toolbox::Pid` **分别闭环控制四个车轮的速度**（速度误差 → 力矩），
+  并叠加摩擦前馈，PID 参数可在 yaml 配置文件中设置；
+- 由四个车轮的**实际转速**经正运动学得到底盘实际速度，积分实现**里程计**，
+  以 [nav_msgs/Odometry](http://docs.ros.org/en/noetic/api/nav_msgs/html/msg/Odometry.html) 发布到 `/odom`，
+  并发布 `odom` → `base_link` 的 TF 变换；
+- 源码遵循 **Google C++ Style**（附 `.clang-format`），带 gtest 单元测试与 roslint 静态检查。
 
-### License
+## 作业需求完成情况
 
-The source code is released under a [BSD 3-Clause license](LICENSE).
+对应[考核规则及评分细则](https://github.com/Bluefairy-ljy/simple_chassis_controller/blob/master/doc/requirement.md)（simple_chassis_controller 仓库 master 分支）：
 
-**Author: Péter Fankhauser<br />
-Affiliation: [ANYbotics](https://www.anybotics.com/)<br />
-Maintainer: Péter Fankhauser, pfankhauser@anybotics.com**
+| 需求 | 状态 | 说明 |
+|---|---|---|
+| 1. 创建新的 ros_package（5 分） | ✅ 已完成 | 以 rm_template 为模板创建 hero_chassis_controller，CMakeLists.txt、package.xml、README.md 已正确填写并持续更新 |
+| 2. 完善的版本管理（5 分） | ✅ 已完成 | 提交信息清晰，仓库历史含合并冲突处理记录 |
+| 3. 正确的代码规范（10 分） | ✅ 已完成 | 采用 Google C++ Style，附 .clang-format，可用 roslint 静态检查 |
+| 4. 使用 PID 控制轮子速度（20 分） | ✅ 已完成 | 一轮一 PID（`control_toolbox::Pid`），参数在 `config/controllers.yaml` 中配置，另加摩擦前馈 |
+| 5. 逆运动学计算轮子期望速度（15 分） | ✅ 已完成 | 订阅 `/cmd_vel`，底盘坐标系速度指令 → 四轮目标转速 |
+| 6. 正运动学实现里程计（15 分） | ✅ 已完成 | 实际轮速 → 底盘速度 → 积分位姿，发布 `/odom` 与 `odom→base_link` TF |
+| 7. tf 实现世界坐标系速度控制（15 分） | ⬜ 待实现 | 计划：增加"底盘坐标系 / 全局坐标系"两种速度模式，用 `tf::transformVector` 变换指令 |
+| 8. 其他特色功能（5 分） | 🔶 部分完成 | 摩擦前馈（消除横移跑偏）；可继续加 `teleop_twist_keyboard` 键盘操控 |
 
-The PACKAGE NAME package has been tested under [ROS] Indigo, Melodic and Noetic on respectively Ubuntu 14.04, 18.04 and
-20.04. This is research code, expect that it changes often and any fitness for a particular purpose is disclaimed.
+> 该表格随需求推进持续更新。
 
-[![Build Status](http://rsl-ci.ethz.ch/buildStatus/icon?job=ros_best_practices)](http://rsl-ci.ethz.ch/job/ros_best_practices/)
+必做部分（10 分：运行 rm_description_for_task 模型、学习理解并运行 simple_chassis_controller、CLion 编译调试）属于环境与理解类任务，在汇报 PPT 与视频中展示。
 
-![Example image](doc/example.jpg)
+## 运动学模型
 
-[comment]: <> (### Publications)
+底盘坐标系参照仿真中的 `base_link`：`+x` 向前，`+y` 向左，`+wz` 逆时针。
+轮序为 **[左前, 右前, 左后, 右后]**。
 
-[comment]: <> (If you use this work in an academic context, please cite the following publication&#40;s&#41;:)
+车轮半径 `R = 0.07625 m`；`L = a + b = 0.4 m`，其中半轴距
+`a = wheel_base / 2 = 0.2 m`，半轮距 `b = wheel_track / 2 = 0.2 m`。
 
-[comment]: <> (* P. Fankhauser, M. Bloesch, C. Gehring, M. Hutter, and R. Siegwart: **PAPER TITLE**. IEEE/RSJ International Conference)
+**逆运动学**（底盘速度 → 四轮目标角速度）：
 
-[comment]: <> (  on Intelligent Robots and Systems &#40;IROS&#41;, 2015. &#40;[PDF]&#40;http://dx.doi.org/10.3929/ethz-a-010173654&#41;&#41;)
+```
+w_fl = (vx - vy - L * wz) / R
+w_fr = (vx + vy + L * wz) / R
+w_bl = (vx + vy - L * wz) / R
+w_br = (vx - vy + L * wz) / R
+```
 
-[comment]: <> (        @inproceedings{Fankhauser2015,)
+**正运动学**（四轮实际角速度 → 底盘速度）：
 
-[comment]: <> (            author = {Fankhauser, P\'{e}ter and Hutter, Marco},)
+```
+vx = R / 4       * ( w_fl + w_fr + w_bl + w_br)
+vy = R / 4       * (-w_fl + w_fr + w_bl - w_br)
+wz = R / (4 * L) * (-w_fl + w_fr - w_bl + w_br)
+```
 
-[comment]: <> (            booktitle = {IEEE/RSJ International Conference on Intelligent Robots and Systems &#40;IROS&#41;},)
+里程计：四轮实际转速 → 正运动学 → 底盘实际速度 → 以中间航向角进行位置积分 → `/odom` 与 TF。
 
-[comment]: <> (            title = {{PAPER TITLE}},)
+## 构建
 
-[comment]: <> (            publisher = {IEEE},)
+要求使用 **catkin-tools**（`catkin build`），环境为 ROS Noetic。
 
-[comment]: <> (            year = {2015})
+```bash
+cd ~/ros_ws
+catkin build hero_chassis_controller
+```
 
-[comment]: <> (        })
+依赖：`rm_description_for_task`、`rm_gazebo`（仿真模型与插件）、`controller_interface`、
+`control_toolbox`、`realtime_tools`、`pluginlib`、`nav_msgs`、`tf2_msgs`、`geometry_msgs`、
+`Eigen`、`Boost`。
 
-## Installation
+## 运行
 
-### Installation from Packages
+```bash
+# 启动 Gazebo 英雄底盘模型并加载控制器
+roslaunch hero_chassis_controller run_hero_chassis_controller.launch
 
-To install all packages from the this repository as Debian packages use
+# 另开终端：前进 0.2 m/s
+rostopic pub -r 10 /cmd_vel geometry_msgs/Twist '{linear: {x: 0.2, y: 0.0}, angular: {z: 0.0}}'
 
-    sudo apt-get install ros-noetic-...
+# 左移 0.2 m/s
+rostopic pub -r 10 /cmd_vel geometry_msgs/Twist '{linear: {x: 0.0, y: 0.2}, angular: {z: 0.0}}'
 
-Or better, use `rosdep`:
+# 原地逆时针旋转 0.5 rad/s
+rostopic pub -r 10 /cmd_vel geometry_msgs/Twist '{linear: {x: 0.0, y: 0.0}, angular: {z: 0.5}}'
+```
 
-	sudo rosdep install --from-paths src
+观察与调试：
 
-### Building from Source
+```bash
+rostopic echo /odom              # 里程计
+rostopic echo /tf                # odom -> base_link 变换
+rqt_plot /joint_states/velocity[0]:velocity[1]:velocity[2]:velocity[3]  # 四轮实际转速曲线
+rosrun rqt_reconfigure rqt_reconfigure   # 在线调 PID 参数（配合 dynamic_reconfigure 使用）
+```
 
-#### Dependencies
+## 节点：controller/hero_chassis_controller
 
-- [Robot Operating System (ROS)](http://wiki.ros.org) (middleware for robotics),
-- [Eigen] (linear algebra library)
+**订阅话题**
 
-  sudo rosdep install --from-paths src
+- **`/cmd_vel`**（[geometry_msgs/Twist](http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Twist.html)）
+  底盘速度指令 `(vx, vy, wz)`，当前按**底盘坐标系**解释。
 
-#### Building
+**发布话题**
 
-To build from source, clone the latest version from this repository into your catkin workspace and compile the package
-using
+- **`/odom`**（[nav_msgs/Odometry](http://docs.ros.org/en/noetic/api/nav_msgs/html/msg/Odometry.html)）
+  里程计，`header.frame_id = "odom"`，`child_frame_id = "base_link"`。
+- **`/tf`**（tf2_msgs/TFMessage）
+  `odom` → `base_link` 的坐标变换。
 
-	cd catkin_workspace/src
-	git clone https://github.com/ethz-asl/ros_best_practices.git
-	cd ../
-	rosdep install --from-paths . --ignore-src
-	catkin_make
+**参数**（命名空间 `controller/hero_chassis_controller`，见 `config/controllers.yaml`）
 
-### Running in Docker
+- **`subscriber_topic`**（string，默认 `"/cmd_vel"`）：速度指令话题名。
+- **`cmd_vel_timeout`**（double，默认 `0.5`）：指令超时时间 (s)，超时后底盘速度置零。
+- **`feedforward_gain`**（double，默认 `0.05`）：摩擦前馈增益 (N·m·s/rad)。
+- **`pid_front_left` / `pid_front_right` / `pid_back_left` / `pid_back_right`**：
+  各轮速度 PID 的 `p`、`i`、`d`、`i_clamp` 参数。
 
-Docker is a great way to run an application with all dependencies and libraries bundles together. Make sure
-to [install Docker](https://docs.docker.com/get-docker/) first.
+## 配置文件
 
-First, spin up a simple container:
+- **`config/controllers.yaml`**：控制器类型、话题名、超时、摩擦前馈及四轮 PID 参数。
+- **`config/default.yaml`**：模板默认参数（保留示例）。
 
-	docker run -ti --rm --name ros-container ros:noetic bash
+## 启动文件
 
-This downloads the `ros:noetic` image from the Docker Hub, indicates that it requires an interactive terminal (`-t, -i`)
-, gives it a name (`--name`), removes it after you exit the container (`--rm`) and runs a command (`bash`).
+- **`launch/run_hero_chassis_controller.launch`**：启动英雄底盘模型与 Gazebo
+  （`roller_type=realistic`、仿真暂停等待），加载控制器参数，
+  并通过 `controller_manager` spawner 启动 `hero_chassis_controller` 与 `joint_state_controller`。
 
-Now, create a catkin workspace, clone the package, build it, done!
+## 测试与代码检查
 
-	apt-get update && apt-get install -y git
-	mkdir -p /ws/src && cd /ws/src
-	git clone https://github.com/leggedrobotics/ros_best_practices.git
-	cd ..
-	rosdep install --from-path src
-	catkin_make
-	source devel/setup.bash
-	roslaunch hero_chassis_controller hero_chassis_controller.launch
+```bash
+catkin test hero_chassis_controller                                  # 单元测试 (gtest)
+catkin build hero_chassis_controller --make-args roslint             # 静态代码检查 (roslint)
+```
 
-### Unit Tests
+## 目录结构
 
-Run the unit tests with
+```
+include/hero_chassis_controller/  头文件（Algorithm、HeroChassisController 等）
+src/                              实现（运动学、控制器插件、示例节点）
+test/                             gtest 单元测试
+config/                           PID 等参数配置
+launch/                           启动文件
+.clang-format                     Google C++ Style 格式化配置
+```
 
-	catkin_make run_tests_hero_chassis_controller
+## 许可证
 
-### Static code analysis
+源码遵循 [BSD 3-Clause license](LICENSE)。
 
-Run the static code analysis with
-
-	catkin_make roslint_hero_chassis_controller
-
-## Usage
-
-Describe the quickest way to run this software, for example:
-
-Run the main node with
-
-	roslaunch hero_chassis_controller hero_chassis_controller.launch
-
-## Config files
-
-Config file folder/set 1
-
-* **config_file_1.yaml** Shortly explain the content of this config file
-
-Config file folder/set 2
-
-* **...**
-
-## Launch files
-
-* **launch_file_1.launch:** shortly explain what is launched (e.g standard simulation, simulation with gdb,...)
-
-  Argument set 1
-
-    - **`argument_1`** Short description (e.g. as commented in launch file). Default: `default_value`.
-
-  Argument set 2
-
-    - **`...`**
-
-* **...**
-
-## Nodes
-
-### hero_chassis_controller
-
-Reads temperature measurements and computed the average.
-
-#### Subscribed Topics
-
-* **`/temperature`** ([sensor_msgs/Temperature])
-
-  The temperature measurements from which the average is computed.
-
-#### Published Topics
-
-...
-
-#### Services
-
-* **`get_average`** ([std_srvs/Trigger])
-
-  Returns information about the current average. For example, you can trigger the computation from the console with
-
-  	rosservice call /hero_chassis_controller/get_average
-
-#### Parameters
-
-* **`subscriber_topic`** (string, default: "/temperature")
-
-  The name of the input topic.
-
-* **`cache_size`** (int, default: 200, min: 0, max: 1000)
-
-  The size of the cache.
-
-### NODE_B_NAME
-
-...
-
-## Bugs & Feature Requests
-
-Please report bugs and request features using the [Issue Tracker](https://github.com/gdut-dynamic-x/rm_template/issues)
-.
-
-
-[ROS]: http://www.ros.org
-
-[rviz]: http://wiki.ros.org/rviz
-
-[Eigen]: http://eigen.tuxfamily.org
-
-[std_srvs/Trigger]: http://docs.ros.org/api/std_srvs/html/srv/Trigger.html
-
-[sensor_msgs/Temperature]: http://docs.ros.org/api/sensor_msgs/html/msg/Temperature.html
+**作者：** bingo<br />
+**仓库：** <https://github.com/ycdjj4-dev/hero_chassis_controller>
