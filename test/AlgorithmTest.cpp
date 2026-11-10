@@ -104,4 +104,54 @@ namespace {
         EXPECT_NEAR(input[1], output[1], 1e-10);
         EXPECT_NEAR(input[2], output[2], 1e-10);
     }
+    TEST(Algorithm, ForwardKinematicsForward) {
+        Algorithm algorithm;
+
+        const double kR = 0.07625;
+
+        Eigen::Vector4d wheel_velocity;
+        wheel_velocity.setConstant(1.0 / kR);
+
+        const Eigen::Vector3d result =
+            algorithm.forwardKinematics(wheel_velocity);
+
+        EXPECT_NEAR(1.0, result[0], 1e-10);
+        EXPECT_NEAR(0.0, result[1], 1e-10);
+        EXPECT_NEAR(0.0, result[2], 1e-10);
+    }
+
+    TEST(Algorithm, ForwardKinematicsLateral) {
+        Algorithm algorithm;
+
+        const double kR = 0.07625;
+
+        Eigen::Vector4d wheel_velocity;
+        wheel_velocity << -1.0 / kR, 1.0 / kR,
+                           1.0 / kR, -1.0 / kR;
+
+        const Eigen::Vector3d result =
+            algorithm.forwardKinematics(wheel_velocity);
+
+        EXPECT_NEAR(0.0, result[0], 1e-10);
+        EXPECT_NEAR(1.0, result[1], 1e-10);
+        EXPECT_NEAR(0.0, result[2], 1e-10);
+    }
+
+    TEST(Algorithm, ForwardKinematicsRotation) {
+        Algorithm algorithm;
+
+        const double kR = 0.07625;
+        const double kL = 0.4;
+
+        Eigen::Vector4d wheel_velocity;
+        wheel_velocity << -kL / kR, kL / kR,
+                          -kL / kR, kL / kR;
+
+        const Eigen::Vector3d result =
+            algorithm.forwardKinematics(wheel_velocity);
+
+        EXPECT_NEAR(0.0, result[0], 1e-10);
+        EXPECT_NEAR(0.0, result[1], 1e-10);
+        EXPECT_NEAR(1.0, result[2], 1e-10);
+    }
 } // namespace
