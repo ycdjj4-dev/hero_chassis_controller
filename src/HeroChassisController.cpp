@@ -52,6 +52,15 @@ namespace hero_chassis_controller {
         // 读取摩擦前馈增益。
         controller_nh.param("feedforward_gain", feedforward_gain_, 0.05);
 
+        // 读取速度指令坐标系模式。
+        controller_nh.param<std::string>("velocity_mode", velocity_mode_,
+                                         "chassis");
+        if (velocity_mode_ != "chassis" && velocity_mode_ != "world") {
+            ROS_WARN_STREAM("Unknown velocity_mode '" << velocity_mode_
+                                                      << "', fallback to 'chassis'");
+            velocity_mode_ = "chassis";
+        }
+
         // 读取速度指令话题名称。
         std::string subscriber_topic;
         controller_nh.param<std::string>("subscriber_topic", subscriber_topic,
@@ -64,7 +73,7 @@ namespace hero_chassis_controller {
         // 初始化里程计发布器。
         odom_publisher_ = std::make_unique<
             realtime_tools::RealtimePublisher<nav_msgs::Odometry> >(controller_nh,
-                                                                    "odom", 10);
+                                                                    "/odom", 10);
         // 初始化 TF 发布器。
         tf_publisher_ = std::make_unique<
             realtime_tools::RealtimePublisher<tf2_msgs::TFMessage> >(controller_nh,
@@ -152,8 +161,22 @@ namespace hero_chassis_controller {
                                        age.toSec() <= cmd_vel_timeout_;
 
             if (command_valid) {
-                chassis_velocity[0] = command->twist.linear.x;
-                chassis_velocity[1] = command->twist.linear.y;
+                // 全局坐标系模式：将世界系下的速度指令旋转到底盘坐标系。
+                // 该旋转等价于用 odom -> base_link 的 tf 变换
+                // (即里程计航向角 odom_yaw_) 做 transformVector。
+                double vx = command->twist.linear.x;
+                double vy = command->twist.linear.y;
+                if (velocity_mode_ == "world") {
+                    const double cos_yaw = std::cos(odom_yaw_);
+                    const double sin_yaw = std::sin(odom_yaw_);
+                    const double vx_world = vx;
+                    const double vy_world = vy;
+                    vx = cos_yaw * vx_world + sin_yaw * vy_world;
+                    vy = -sin_yaw * vx_world + cos_yaw * vy_world;
+                }
+                // wz 与坐标系无关，无需变换。
+                chassis_velocity[0] = vx;
+                chassis_velocity[1] = vy;
                 chassis_velocity[2] = command->twist.angular.z;
             }
         }

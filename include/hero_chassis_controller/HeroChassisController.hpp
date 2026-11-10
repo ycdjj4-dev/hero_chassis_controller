@@ -4,6 +4,7 @@
 #define HERO_CHASSIS_CONTROLLER_HEROCHASSISCONTROLLER_HPP_
 
 #include <memory>
+#include <string>
 
 #include <ros/ros.h>
 
@@ -79,6 +80,9 @@ namespace hero_chassis_controller {
 
         // 摩擦前馈增益 (N·m·s/rad)。
         double feedforward_gain_{0.05};
+
+        // 速度指令坐标系模式: "chassis" 底盘坐标系 / "world" 全局坐标系。
+        std::string velocity_mode_{"chassis"};
 
         // 里程计累计位姿 (m, m, rad)。
         double odom_x_{0.0};

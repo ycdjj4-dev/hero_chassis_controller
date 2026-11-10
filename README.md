@@ -9,7 +9,8 @@
 
 - 以 ros_control **控制器插件** 的形式运行，通过 `pluginlib` 加载进 Gazebo 仿真（`EffortJointInterface`）；
 - 订阅 `/cmd_vel`（[geometry_msgs/Twist](http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/Twist.html)），
-  将其视为底盘坐标系下的速度指令，经**麦轮逆运动学**解算四个车轮的期望转速；
+  支持**底盘坐标系 / 全局坐标系**两种速度指令模式（`velocity_mode` 参数），
+  经**麦轮逆运动学**解算四个车轮的期望转速；
 - 用四个 `control_toolbox::Pid` **分别闭环控制四个车轮的速度**（速度误差 → 力矩），
   并叠加摩擦前馈，PID 参数可在 yaml 配置文件中设置；
 - 由四个车轮的**实际转速**经正运动学得到底盘实际速度，积分实现**里程计**，
@@ -29,7 +30,7 @@
 | 4. 使用 PID 控制轮子速度（20 分） | ✅ 已完成 | 一轮一 PID（`control_toolbox::Pid`），参数在 `config/controllers.yaml` 中配置，另加摩擦前馈 |
 | 5. 逆运动学计算轮子期望速度（15 分） | ✅ 已完成 | 订阅 `/cmd_vel`，底盘坐标系速度指令 → 四轮目标转速 |
 | 6. 正运动学实现里程计（15 分） | ✅ 已完成 | 实际轮速 → 底盘速度 → 积分位姿，发布 `/odom` 与 `odom→base_link` TF |
-| 7. tf 实现世界坐标系速度控制（15 分） | ⬜ 待实现 | 计划：增加"底盘坐标系 / 全局坐标系"两种速度模式，用 `tf::transformVector` 变换指令 |
+| 7. tf 实现世界坐标系速度控制（15 分） | ✅ 已完成 | `velocity_mode` 参数支持 chassis / world 两种模式；world 模式用里程计航向角把世界系指令旋转到底盘系（等价于 odom→base_link 的 tf 变换） |
 | 8. 其他特色功能（5 分） | 🔶 部分完成 | 摩擦前馈（消除横移跑偏）；可继续加 `teleop_twist_keyboard` 键盘操控 |
 
 > 该表格随需求推进持续更新。
@@ -119,6 +120,8 @@ rosrun rqt_reconfigure rqt_reconfigure   # 在线调 PID 参数（配合 dynamic
 
 - **`subscriber_topic`**（string，默认 `"/cmd_vel"`）：速度指令话题名。
 - **`cmd_vel_timeout`**（double，默认 `0.5`）：指令超时时间 (s)，超时后底盘速度置零。
+- **`velocity_mode`**（string，默认 `"chassis"`）：速度指令坐标系模式，
+  `"chassis"` 为底盘坐标系，`"world"` 为全局（世界）坐标系。
 - **`feedforward_gain`**（double，默认 `0.05`）：摩擦前馈增益 (N·m·s/rad)。
 - **`pid_front_left` / `pid_front_right` / `pid_back_left` / `pid_back_right`**：
   各轮速度 PID 的 `p`、`i`、`d`、`i_clamp` 参数。

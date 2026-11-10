@@ -8,6 +8,9 @@ controller:
     # 摩擦前馈增益 (N·m·s/rad)，补偿车轮关节摩擦（模型 friction=0.05）
     feedforward_gain: 0.05
 
+    # 速度指令坐标系模式: chassis(底盘坐标系) / world(全局坐标系)
+    velocity_mode: chassis
+
     # 左前轮 PID
     pid_front_left:
       p: 1.0
