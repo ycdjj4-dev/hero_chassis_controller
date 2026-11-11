@@ -1,4 +1,6 @@
 // 麦轮底盘控制器实现。
+// init: 加载时初始化 | cmdVelCallback: 订阅回调 | starting/stopping: 启停清理
+// update: 每周期执行一次 —— 指令处理 -> 运动控制(PID) -> 里程计发布
 #include "hero_chassis_controller/HeroChassisController.hpp"
 
 #include <algorithm>
@@ -7,9 +9,11 @@
 #include <pluginlib/class_list_macros.h>
 
 namespace hero_chassis_controller {
+    // init(): 加载时执行一次, 连接硬件句柄、读取参数、创建收发器。
     bool HeroChassisController::init(hardware_interface::EffortJointInterface *hw,
                                      ros::NodeHandle & /*root_nh*/,
                                      ros::NodeHandle &controller_nh) {
+        // ---- 板块 1: 关节句柄与 PID 初始化 ----
         try {
             front_left_joint_ = hw->getHandle("left_front_wheel_joint");
             front_right_joint_ = hw->getHandle("right_front_wheel_joint");
@@ -44,37 +48,37 @@ namespace hero_chassis_controller {
             return false;
         }
 
+        // ---- 板块 2: 读取配置参数 ----
         geometry_msgs::TwistStamped initial_command;
         command_buffer_.initRT(initial_command);
 
-        // 读取速度指令超时时间。
+        // 指令超时时间。
         controller_nh.param("cmd_vel_timeout", cmd_vel_timeout_, 0.5);
-        // 读取摩擦前馈增益。
+        // 摩擦前馈增益。
         controller_nh.param("feedforward_gain", feedforward_gain_, 0.05);
-
-        // 读取速度指令坐标系模式。
+        // 速度指令坐标系模式(选做7)。
         controller_nh.param<std::string>("velocity_mode", velocity_mode_,
                                          "chassis");
         if (velocity_mode_ != "chassis" && velocity_mode_ != "world") {
             ROS_WARN_STREAM("Unknown velocity_mode '" << velocity_mode_
-                                                      << "', fallback to 'chassis'");
+                << "', fallback to 'chassis'");
             velocity_mode_ = "chassis";
         }
-
-        // 读取速度指令话题名称。
+        // 速度指令话题名。
         std::string subscriber_topic;
         controller_nh.param<std::string>("subscriber_topic", subscriber_topic,
                                          "/cmd_vel");
 
-        // 创建订阅器。
+        // ---- 板块 3: 创建订阅器与发布器 ----
+        // 订阅 /cmd_vel。
         cmd_vel_subscriber_ = controller_nh.subscribe<geometry_msgs::Twist>(
             subscriber_topic, 1, &HeroChassisController::cmdVelCallback, this);
 
-        // 初始化里程计发布器。
+        // 发布 /odom(选做6)。
         odom_publisher_ = std::make_unique<
             realtime_tools::RealtimePublisher<nav_msgs::Odometry> >(controller_nh,
                                                                     "/odom", 10);
-        // 初始化 TF 发布器。
+        // 发布 /tf(选做6)。
         tf_publisher_ = std::make_unique<
             realtime_tools::RealtimePublisher<tf2_msgs::TFMessage> >(controller_nh,
                                                                      "/tf", 10);
@@ -90,7 +94,7 @@ namespace hero_chassis_controller {
         tf_publisher_->msg_.transforms[0].header.frame_id = "odom";
         tf_publisher_->msg_.transforms[0].child_frame_id = "base_link";
 
-        // 初始化四元数，表示初始朝向为 0。
+        // 初始朝向为 0。
         odom_publisher_->msg_.pose.pose.orientation.w = 1.0;
         tf_publisher_->msg_.transforms[0].transform.rotation.w = 1.0;
 
@@ -98,7 +102,7 @@ namespace hero_chassis_controller {
         return true;
     }
 
-    // 接收底盘速度指令。
+    // 订阅回调: 把收到的指令(带时间戳)写入实时缓冲区。
     void HeroChassisController::cmdVelCallback(
         const geometry_msgs::TwistConstPtr &msg) {
         geometry_msgs::TwistStamped command;
@@ -107,7 +111,7 @@ namespace hero_chassis_controller {
         command_buffer_.writeFromNonRT(command);
     }
 
-    // 控制器启动。
+    // 启动清理: 清零力矩、里程计位姿与 PID 状态。
     void HeroChassisController::starting(const ros::Time &time) {
         // 记录控制器启动时间。
         controller_start_time_ = time;
@@ -123,7 +127,7 @@ namespace hero_chassis_controller {
         pid_back_left_.reset();
         pid_back_right_.reset();
 
-        // 将四个车轮的初始力矩设为 0。
+        // 初始力矩清零。
         front_left_joint_.setCommand(0.0);
         front_right_joint_.setCommand(0.0);
         back_left_joint_.setCommand(0.0);
@@ -132,9 +136,13 @@ namespace hero_chassis_controller {
         ROS_INFO("Hero chassis controller started!");
     }
 
-    // 控制器实时更新。
+    // update(): 每周期一次的控制流水线。
+    //   步骤 1~3  指令处理, 含 world 模式坐标旋转(选做7)
+    //   步骤 4~8  逆运动学 + 四轮 PID 力矩控制(选做4/5)
+    //   步骤 9~14 正运动学积分, 发布 /odom 与 TF(选做6)
     void HeroChassisController::update(const ros::Time &time,
                                        const ros::Duration &period) {
+        // ---- 板块 A: 指令处理(步骤 1~3) ----
         // 1. 检查控制周期。
         if (period.toSec() <= 0.0) {
             front_left_joint_.setCommand(0.0);
@@ -150,7 +158,7 @@ namespace hero_chassis_controller {
         // 默认底盘速度为零。
         Eigen::Vector3d chassis_velocity = Eigen::Vector3d::Zero();
 
-        // 3. 检查速度指令是否有效。
+        // 3. 检查指令是否有效(时间戳、超时)。
         if (command != nullptr) {
             const ros::Time stamp = command->header.stamp;
             const ros::Duration age = time - stamp;
@@ -161,9 +169,7 @@ namespace hero_chassis_controller {
                                        age.toSec() <= cmd_vel_timeout_;
 
             if (command_valid) {
-                // 全局坐标系模式：将世界系下的速度指令旋转到底盘坐标系。
-                // 该旋转等价于用 odom -> base_link 的 tf 变换
-                // (即里程计航向角 odom_yaw_) 做 transformVector。
+                // world 模式: 用里程计航向角把世界系速度旋转到底盘系(选做7)。
                 double vx = command->twist.linear.x;
                 double vy = command->twist.linear.y;
                 if (velocity_mode_ == "world") {
@@ -181,11 +187,12 @@ namespace hero_chassis_controller {
             }
         }
 
-        // 4. 逆运动学：计算四个车轮的目标角速度。
+        // ---- 板块 B: 运动控制(步骤 4~8) ----
+        // 4. 逆运动学: 底盘速度 -> 四轮目标转速。
         const Eigen::Vector4d target_wheel_velocity =
                 algorithm_.inverseKinematics(chassis_velocity);
 
-        // 5. 计算四个车轮的速度误差。
+        // 5. 速度误差 = 目标转速 - 实际转速。
         const double error_fl =
                 target_wheel_velocity[0] - front_left_joint_.getVelocity();
         const double error_fr =
@@ -195,7 +202,7 @@ namespace hero_chassis_controller {
         const double error_br =
                 target_wheel_velocity[3] - back_right_joint_.getVelocity();
 
-        // 6. 四个 PID 分别计算输出力矩，并叠加摩擦前馈。
+        // 6. PID 计算力矩 + 摩擦前馈。
         const double effort_fl = pid_front_left_.computeCommand(error_fl, period) +
                                  feedforward_gain_ * target_wheel_velocity[0];
         const double effort_fr = pid_front_right_.computeCommand(error_fr, period) +
@@ -205,19 +212,20 @@ namespace hero_chassis_controller {
         const double effort_br = pid_back_right_.computeCommand(error_br, period) +
                                  feedforward_gain_ * target_wheel_velocity[3];
 
-        // 7. 限制输出力矩。
+        // 7. 力矩限幅。
         constexpr double kMaxEffort = 5.0;
         const auto limit_effort = [kMaxEffort](const double effort) {
             return std::max(-kMaxEffort, std::min(kMaxEffort, effort));
         };
 
-        // 8. 将力矩发送给四个车轮。
+        // 8. 下发力矩。
         front_left_joint_.setCommand(limit_effort(effort_fl));
         front_right_joint_.setCommand(limit_effort(effort_fr));
         back_left_joint_.setCommand(limit_effort(effort_bl));
         back_right_joint_.setCommand(limit_effort(effort_br));
 
-        // 9. 获取四个车轮的实际角速度
+        // ---- 板块 C: 里程计(步骤 9~14) ----
+        // 9. 读取四轮实际转速。
         Eigen::Vector4d actual_wheel_velocity;
 
         actual_wheel_velocity <<
@@ -226,14 +234,12 @@ namespace hero_chassis_controller {
                 back_left_joint_.getVelocity(),
                 back_right_joint_.getVelocity();
 
-        // 10. 正运动学：计算底盘实际速度
+        // 10. 正运动学: 实际轮速 -> 底盘实际速度。
         const Eigen::Vector3d actual_chassis_velocity =
                 algorithm_.forwardKinematics(actual_wheel_velocity);
 
-        // 11. 根据实际速度积分，计算机器人位姿
+        // 11. 积分位姿(用中间时刻航向角, 比欧拉积分更准)。
         const double dt = period.toSec();
-
-        // 使用中间时刻的航向角进行位置积分
         const double yaw_mid =
                 odom_yaw_ + 0.5 * actual_chassis_velocity[2] * dt;
 
@@ -249,7 +255,7 @@ namespace hero_chassis_controller {
 
         odom_yaw_ += actual_chassis_velocity[2] * dt;
 
-        // 12. 将航向角转换为四元数
+        // 12. 航向角转四元数。
         geometry_msgs::Quaternion orientation;
 
         orientation.x = 0.0;
@@ -257,7 +263,7 @@ namespace hero_chassis_controller {
         orientation.w = std::cos(odom_yaw_ / 2.0);
         orientation.z = std::sin(odom_yaw_ / 2.0);
 
-        // 13. 发布里程计
+        // 13. 发布 /odom。
         if (odom_publisher_->trylock()) {
             odom_publisher_->msg_.header.stamp = time;
 
@@ -278,7 +284,7 @@ namespace hero_chassis_controller {
             odom_publisher_->unlockAndPublish();
         }
 
-        // 14. 发布 TF
+        // 14. 发布 TF(odom -> base_link)。
         if (tf_publisher_->trylock()) {
             tf_publisher_->msg_.transforms[0].header.stamp = time;
 
@@ -297,9 +303,9 @@ namespace hero_chassis_controller {
         }
     }
 
-    // 控制器停止。
+    // 停止清理: 力矩清零并重置 PID。
     void HeroChassisController::stopping(const ros::Time & /*time*/) {
-        // 四个车轮停止输出力矩。
+        // 力矩清零。
         front_left_joint_.setCommand(0.0);
         front_right_joint_.setCommand(0.0);
         back_left_joint_.setCommand(0.0);

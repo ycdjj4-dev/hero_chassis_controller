@@ -31,7 +31,7 @@
 | 5. 逆运动学计算轮子期望速度（15 分） | ✅ 已完成 | 订阅 `/cmd_vel`，底盘坐标系速度指令 → 四轮目标转速 |
 | 6. 正运动学实现里程计（15 分） | ✅ 已完成 | 实际轮速 → 底盘速度 → 积分位姿，发布 `/odom` 与 `odom→base_link` TF |
 | 7. tf 实现世界坐标系速度控制（15 分） | ✅ 已完成 | `velocity_mode` 参数支持 chassis / world 两种模式；world 模式用里程计航向角把世界系指令旋转到底盘系（等价于 odom→base_link 的 tf 变换） |
-| 8. 其他特色功能（5 分） | 🔶 部分完成 | 摩擦前馈（消除横移跑偏）；可继续加 `teleop_twist_keyboard` 键盘操控 |
+| 8. 其他特色功能（5 分） | ✅ 已完成 | 摩擦前馈（消除横移跑偏）+ teleop_twist_keyboard 键盘操控 |
 
 > 该表格随需求推进持续更新。
 
@@ -91,6 +91,14 @@ rostopic pub -r 10 /cmd_vel geometry_msgs/Twist '{linear: {x: 0.0, y: 0.2}, angu
 
 # 原地逆时针旋转 0.5 rad/s
 rostopic pub -r 10 /cmd_vel geometry_msgs/Twist '{linear: {x: 0.0, y: 0.0}, angular: {z: 0.5}}'
+
+# 键盘操控(选做8): i/, 前进后退, j/l 原地转向, k 停止;
+# 按住 Shift + J/L 为左右横移, Shift + U/O/M/. 为斜向移动
+# 方式一(推荐): 编译一次后可用 rosrun
+cd ~/catkin_ws && catkin build teleop_twist_keyboard
+rosrun teleop_twist_keyboard teleop_twist_keyboard
+# 方式二: 直接运行脚本(需交互式终端, 点击该窗口获得焦点后再按键)
+python3 ~/catkin_ws/src/teleop_twist_keyboard/teleop_twist_keyboard.py
 ```
 
 观察与调试：

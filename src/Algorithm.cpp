@@ -1,4 +1,4 @@
-// 运动学算法实现。
+// 运动学算法实现: 数据统计 + 麦轮逆/正运动学。
 #include "hero_chassis_controller/Algorithm.hpp"
 
 #include <boost/accumulators/accumulators.hpp>
@@ -6,6 +6,7 @@
 #include <boost/accumulators/statistics/mean.hpp>
 
 namespace hero_chassis_controller {
+    // 累加器: 用于 addData()/getAverage() 的均值与计数统计。
     struct Algorithm::Data {
         using Accumulator = boost::accumulators::accumulator_set<
             double,
@@ -14,19 +15,23 @@ namespace hero_chassis_controller {
         Accumulator acc;
     };
 
+    // ---- 板块 1: 数据统计 ----
     Algorithm::Algorithm() : data_(std::make_unique<Data>()) {
     }
 
     Algorithm::~Algorithm() = default;
 
+    // 添加单个数据。
     void Algorithm::addData(const double data) { data_->acc(data); }
 
+    // 添加一组数据。
     void Algorithm::addData(const Eigen::VectorXd &data) {
         for (Eigen::Index i = 0; i < data.size(); ++i) {
             addData(data[i]);
         }
     }
 
+    // 返回平均值; 无数据时返回 0。
     double Algorithm::getAverage() const {
         if (boost::accumulators::count(data_->acc) == 0) {
             return 0.0;
@@ -34,6 +39,8 @@ namespace hero_chassis_controller {
         return boost::accumulators::mean(data_->acc);
     }
 
+    // ---- 板块 2: 逆运动学(选做5) ----
+    // 输入: 底盘速度(vx, vy, wz) -> 输出: 四轮目标转速 [左前,右前,左后,右后]
     Eigen::Vector4d Algorithm::inverseKinematics(
         const Eigen::Vector3d &chassis_velocity) const {
         const double vx = chassis_velocity[0];
@@ -42,13 +49,10 @@ namespace hero_chassis_controller {
 
         // 车轮半径 (m)。
         const double kWheelRadius = 0.07625;
-        // 运动学系数 L = a + b，a 为半轴距 (wheel_base / 2)，
-        // b 为半轮距 (wheel_track / 2)。
-        // 本模型 wheel_base = wheel_track = 0.4，故 L = 0.2 + 0.2 = 0.4。
+        // 运动学系数 L = a + b (半轴距 + 半轮距), 本模型为 0.2 + 0.2 = 0.4。
         const double kHalfWheelbasePlusHalfTrack = 0.4;
 
-        // 经典麦轮逆运动学，与 rm_description_for_task 模型的辊子布局一致
-        // (reflect: 左前=1, 右前=-1, 左后=-1, 右后=1；四轮关节轴均朝 +y)。
+        // 经典麦轮公式, 符号与模型辊子布局一致(reflect: 左前/右后=1, 右前/左后=-1)。
         Eigen::Vector4d wheel_velocity;
         wheel_velocity[0] =
                 (vx - vy - kHalfWheelbasePlusHalfTrack * wz) / kWheelRadius; // 左前
@@ -62,6 +66,8 @@ namespace hero_chassis_controller {
         return wheel_velocity;
     }
 
+    // ---- 板块 3: 正运动学(选做6 里程计的基础) ----
+    // 输入: 四轮实际转速 -> 输出: 底盘实际速度(vx, vy, wz)
     Eigen::Vector3d Algorithm::forwardKinematics(
         const Eigen::Vector4d &wheel_velocity) const {
         const double kWheelRadius = 0.07625;
